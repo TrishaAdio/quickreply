@@ -75,6 +75,10 @@ async def run(session_name: str = config.DEFAULT_SESSION) -> None:
     app = App(client, db, self_id=me.id, me=me)
     await app.load_settings()
     await app.register_account()
+    if not app.cfg.get("dm_tracking_since"):
+        from qr.database.mongo import utcnow
+
+        await app.set(dm_tracking_since=utcnow())
     recovered = await payments.recover_payments(app, interrupted_adds=True)
     if recovered:
         ui.warn(f"Recovered {recovered} interrupted payment/channel-delivery record(s).")

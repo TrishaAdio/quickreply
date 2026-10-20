@@ -46,6 +46,9 @@ DEFAULTS: dict = {
     # screenshot archives + publishing
     "archive_channel": DEFAULT_ARCHIVE_CHANNEL,
     "archive_enabled": True,
+    # DM traffic analytics (.graph)
+    "dm_tracking": True,
+    "dm_tracking_since": None,    # set automatically on first start
     "publish_channel": None,      # set explicitly with .setpostchannel
     "post_caption": DEFAULT_POST_CAPTION,
 }
@@ -113,6 +116,7 @@ EDITABLE = {
     "relay_link": _bool,
     "swap_greeting": _bool,
     "archive_enabled": _bool,
+    "dm_tracking": _bool,
 }
 
 
