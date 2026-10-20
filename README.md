@@ -106,14 +106,11 @@ To restore account A onto account B, run `.save` on A. Then start QuickReply on 
 | `.graph scan [day]` | Reads that day's DMs from your chat history first, which picks up DMs that arrived while QuickReply was offline, then renders the card. Already-counted messages are never counted twice. |
 | `.tgraph` | Test card with made-up data. Nothing is read or stored. |
 
-The card shows:
-- DMs per hour as glowing bars, with the peak hour highlighted
-- income (INR) per hour as a gold line
-- total DMs and unique people
-- the peak DM hour and the busiest 3-hour window
-- total income and the peak income hour
-- the share of DM senders who paid
-- a "now" marker on today's card
+The card (2400×1350) shows:
+- **Hero numbers:** today's DM count and unique people, and total INR with the number of payments.
+- **Peaks panel:** the peak DM hour, the peak income hour and the busiest 3-hour window, in 12-hour time.
+- **Light-pillar timeline:** DMs per hour rise above the hour strip, coloured from cool blue to hot pink by volume. INR per hour hangs below it in gold. Both peaks get a lens flare and a callout, and a NOW marker shows on today's card.
+- **Footer:** the share of DM senders who paid, the most people in one hour, and when tracking started.
 
 What counts as a DM: every incoming private message from a real user. Bots, Telegram's service account, your own account and the `.linksource` account are excluded. Only the sender id, message id and time are stored, never the text. Rows are deleted automatically after 180 days. Switch tracking off with `.config dm_tracking off`.
 
@@ -181,7 +178,7 @@ Each ZIP becomes one `post_jobs` document keyed by its SHA-256, so the same arch
 
 ## Credits
 
-The `.graph` card uses the bundled [Poppins](https://github.com/itfoundry/Poppins) font (SIL Open Font License, `qr/assets/fonts/OFL.txt`). Bundling it means the card looks the same on Windows and Linux, and the ₹ sign renders.
+The `.graph` card uses two bundled fonts, both under the SIL Open Font License: [Unbounded](https://github.com/googlefonts/unbounded) for the display text and [Space Grotesk](https://github.com/floriankarsten/space-grotesk) for labels (see `qr/assets/fonts/OFL-*.txt`). Bundling them means the card looks the same on Windows and Linux, and the ₹ sign renders.
 
 ## Tests
 

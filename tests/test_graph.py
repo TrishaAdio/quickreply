@@ -126,32 +126,33 @@ def test_render_produces_glow_card_for_every_state():
     for stats in states:
         data = graph_render.render(stats, account="Alice @alice")
         image = Image.open(io.BytesIO(data))
-        assert image.format == "JPEG" and image.size == (1600, 1000)
+        assert image.format == "JPEG" and image.size == (graph_render.W, graph_render.H) == (2400, 1350)
         image.load()
 
 
 def test_render_png_option_and_rupee_font():
     data = graph_render.render(dm_stats.synthetic(DAY, seed=3), fmt="PNG")
     assert Image.open(io.BytesIO(data)).format == "PNG"
-    rupee = graph_render.font("Bold", 40)
-    assert rupee.getmask("\u20b9").getbbox() != rupee.getmask("\U0010fffd").getbbox()
+    for kind in ("display", "text"):
+        rupee = graph_render.font(kind, 800, 60)
+        assert isinstance(rupee, graph_render.ImageFont.FreeTypeFont)   # bundled font loaded
+        assert rupee.getmask("\u20b9").getbbox() != rupee.getmask("\U0010fffd").getbbox()
 
 
-def test_axis_and_money_helpers():
-    assert graph_render.nice_ceiling(95) == (100, 25)
-    assert graph_render.nice_ceiling(0) == (4.0, 1.0)
+def test_money_and_hour_helpers():
     assert graph_render.compact_inr(950) == "\u20b9950"
     assert graph_render.compact_inr(6796) == "\u20b96.8k"
     assert graph_render.compact_inr(150000) == "\u20b91.5L"
     assert graph_render.compact_inr(21000000) == "\u20b92.1Cr"
+    assert graph_render.h12(0) == "12 AM" and graph_render.h12(21) == "9 PM" and graph_render.h12(12) == "12 PM"
+    assert graph_render.range12(19, 22) == "7\u201310 PM"
+    assert graph_render.range12(11, 14) == "11 AM\u20132 PM"
+    assert graph_render.range12(22, 25) == "10 PM\u20131 AM"
 
 
-def test_income_curve_never_overshoots_the_hourly_points():
-    points = [(i * 10.0, y) for i, y in enumerate([100, 100, 20, 100, 100, 0, 100])]
-    curve = graph_render.monotone_curve(points)
-    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
-        inside = [y for x, y in curve if x0 <= x <= x1]
-        assert min(inside) >= min(y0, y1) - 1e-6 and max(inside) <= max(y0, y1) + 1e-6
+def test_heat_palette_runs_cool_to_hot():
+    assert graph_render.heat(0.0) == graph_render.BLUE
+    assert graph_render.heat(1.0) == graph_render.HOT
 
 
 def test_synthetic_day_is_plausible():
@@ -177,7 +178,7 @@ async def test_graph_and_tgraph_commands_send_the_card(app, account, client):
     chat, info = client.sent[-1]
     assert chat == "me" and "DMs: 1 from 1 people" in info["caption"]
     photo = account.media[max(account.media)]
-    assert Image.open(io.BytesIO(photo)).size == (1600, 1000)
+    assert Image.open(io.BytesIO(photo)).size == (2400, 1350)
 
     event = FakeEvent(".graph 2026-13-40", chat_id=account.user.id, sender_id=account.user.id)
     await router.on_outgoing(app, event)
