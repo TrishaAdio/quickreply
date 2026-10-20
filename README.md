@@ -97,6 +97,8 @@ To restore account A onto account B, run `.save` on A. Then start QuickReply on 
 | `.postnow [YYYY-MM-DD]` | Checks the posting channel and your rights there, then publishes every pending job, oldest first: delivered daily archives plus unfinished `.post`/`.postbatch` jobs. |
 
 ### DM analytics (Saved Messages)
+![.tgraph preview (synthetic data)](docs/graph-preview.jpg)
+
 | Command | Effect |
 |---|---|
 | `.graph` | Today's card, live so far (Asia/Kolkata hours). Sent to Saved Messages with a text summary. |
