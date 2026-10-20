@@ -29,21 +29,95 @@ _BOOL_FALSE = ("0", "false", "no", "")
 
 
 def looks_like_legacy(path: Path) -> bool:
+    """A ChannelGuard checkout (never QuickReply itself, which has ``qr/``)."""
     path = Path(path)
-    return (path / "quickreply.py").exists() and (
-        (path / ".env").exists() or (path / LEGACY_SESSION).exists() or (path / "data").exists())
+    if not (path / "quickreply.py").is_file() or (path / "qr").is_dir():
+        return False
+    signature = any((path / name).exists() for name in ("guard.py", "linkstore.py", "runtime_lock.py"))
+    has_data = (path / "data" / "pay.json").exists() or (path / LEGACY_SESSION).exists()
+    return signature or has_data
 
 
 def candidates(base: Path) -> list[Path]:
-    found = []
-    for parent in {Path(base).resolve().parent, Path.cwd().resolve().parent}:
+    """ChannelGuard checkouts near QuickReply: its parents (QuickReply cloned
+    *inside* ChannelGuard) and their sibling folders."""
+    found = set()
+    roots = []
+    starts = [Path(base).resolve()]
+    try:
+        starts.append(Path.cwd().resolve())
+    except OSError:  # working directory was deleted
+        pass
+    for start in starts:
+        roots.extend([start, *list(start.parents)[:2]])
+    for root in dict.fromkeys(roots):
+        if looks_like_legacy(root):
+            found.add(root)
         try:
-            for child in parent.iterdir():
+            for child in root.iterdir():
                 if child.is_dir() and looks_like_legacy(child):
-                    found.append(child)
+                    found.add(child)
         except OSError:
             continue
-    return sorted(set(found))
+    return sorted(found)
+
+
+def summary(path: Path) -> dict:
+    """What an import would bring over (read-only)."""
+    path = Path(path)
+    pay = _read_json(path / "data" / "pay.json", {})
+    payments = pay.get("payments") if isinstance(pay, dict) else []
+    payments = [p for p in payments if isinstance(p, dict)] if isinstance(payments, list) else []
+    greeted = _read_json(path / "data" / "greeted.json", [])
+    env = read_env_file(path / ".env")
+    return {
+        "path": str(path),
+        "credentials": bool(env.get("API_ID") and env.get("API_HASH")),
+        "session": (path / LEGACY_SESSION).exists(),
+        "payments": len(payments),
+        "payments_valid": sum(1 for p in payments if p.get("status", "valid") == "valid"),
+        "templates": [k for k in ("done", "channel") if isinstance(pay, dict) and pay.get(f"{k}_template")],
+        "payment_channel": (pay.get("post_channel") if isinstance(pay, dict) else None) or env.get("PAYMENT_CHANNEL"),
+        "greeting": (path / "data" / "greeting.json").exists(),
+        "greeted": len(greeted) if isinstance(greeted, list) else 0,
+    }
+
+
+def legacy_running(path: Path) -> bool:
+    """True while the old quickreply.py holds its data-folder lock.
+
+    Probes the lock without writing to the file (ChannelGuard stays untouched).
+    """
+    import os
+
+    lock_path = Path(path) / "data" / "quickreply.lock"
+    if not lock_path.exists():
+        return False
+    try:
+        handle = open(lock_path, "rb")
+    except OSError:
+        return False
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBRLCK, 1)
+            except OSError:
+                return True
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return False
+        import fcntl
+
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        return False
+    finally:
+        handle.close()
 
 
 def legacy_credentials(path: Path) -> dict:
