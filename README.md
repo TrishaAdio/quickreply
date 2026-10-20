@@ -118,7 +118,7 @@ What counts as a DM: every incoming private message from a real user. Bots, Tele
 Income per hour comes from `/add` payments. Payments reset with `/clear` still count, because that money really arrived; fake and failed payments don't.
 
 ### Other
-`/set` (reply to a post) · `/unset` · `/show` · `/away on|off|status` · `/broadcast 9:30 AM 18 JUL THANKS FOR` (reply to a post) · `.linksource <@user|id|off>` (the only sender whose invite links update `/demo`) · `.config [key value]` (`rio_pct marco_pct share_base order_prefix order_id_length online_minutes shortcut relay_link swap_greeting archive_enabled`) · `L` in a private chat · `.ping` · `.help`
+`/set` (reply to a post) · `/unset` · `/show` · `/away on|off|status` · `/broadcast 9:30 AM 18 JUL THANKS FOR` (reply to a post) · `.linksource <@user|id|off>` (the only sender whose invite links update `/demo`) · `.config [key value]` (`rio_pct marco_pct share_base order_prefix order_id_length online_minutes shortcut relay_link swap_greeting archive_enabled dm_tracking`) · `L` in a private chat · `.ping` · `.help`
 
 ## What `.save` stores
 
@@ -142,6 +142,7 @@ Every field gets a status: `saved`, `empty`, `unsupported` (with the reason) or 
 | `screenshots`, `screenshots_fs.*` | Screenshots waiting for their daily ZIP. |
 | `archives`, `archives_fs.*` | Daily archive manifests, ZIPs and delivery/post state. |
 | `post_jobs` | Posting jobs with per-item and per-album state. |
+| `dm_events` (TTL 180 days) | One row per incoming DM for `.graph`: sender id, message id, time. No text. |
 | `restore_sessions` (TTL), `restore_history`, `audit`, `command_claims` (TTL) | Confirmations, restore reports, a minimal audit trail, and once-only command execution. |
 
 Timestamps are UTC. Day boundaries use Asia/Kolkata. Login codes, 2FA passwords and session data are never written to MongoDB.
@@ -175,6 +176,10 @@ Each ZIP becomes one `post_jobs` document keyed by its SHA-256, so the same arch
 - Restored **business chat links** get new `t.me/m/…` URLs. The **intro sticker** may not be re-referenced from another account.
 - Greeting/away recipient lists only keep users the target account can reach.
 - Telegram re-encodes uploaded photos. A restored photo is recognised later by the photo id recorded when it was uploaded, so repeated restores don't upload it again.
+
+## Credits
+
+The `.graph` card uses the bundled [Poppins](https://github.com/itfoundry/Poppins) font (SIL Open Font License, `qr/assets/fonts/OFL.txt`). Bundling it means the card looks the same on Windows and Linux, and the ₹ sign renders.
 
 ## Tests
 
