@@ -19,6 +19,7 @@ except ImportError:  # pragma: no cover - guarded by requirements.txt
     from gridfs.asynchronous import AsyncGridFSBucket  # type: ignore
 
 SCHEMA_VERSION = 1
+DM_RETENTION_DAYS = 180   # .graph history kept this long (TTL index)
 
 # GridFS buckets. Screenshots and archive ZIPs live in their own buckets so a
 # post-delivery purge can never touch backup media.
@@ -137,6 +138,10 @@ class Database:
                 [("account_id", ASCENDING), ("created_at", DESCENDING)])
             await self.audit.create_index(
                 [("account_id", ASCENDING), ("ts", DESCENDING)])
+            await self.dm_events.create_index(
+                [("account_id", ASCENDING), ("date", ASCENDING)])
+            await self.dm_events.create_index(
+                "at", expireAfterSeconds=DM_RETENTION_DAYS * 86400)
             for bucket in (MEDIA_BUCKET, SCREENSHOT_BUCKET, ARCHIVE_BUCKET):
                 await self.db[f"{bucket}.files"].create_index("metadata.sha256")
         except PyMongoError as error:
@@ -226,4 +231,5 @@ COLLECTIONS = {
     "restore_sessions",  # pending .setup confirmations (TTL)
     "restore_history",   # .setup reports
     "audit",             # minimal audit records
+    "dm_events",         # one row per incoming DM (no text) for .graph, TTL
 }

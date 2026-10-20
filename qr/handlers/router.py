@@ -25,17 +25,17 @@ from pymongo.errors import DuplicateKeyError
 from qr import ui
 from qr.database.mongo import utcnow
 from qr.database.settings_store import EDITABLE
-from qr.handlers import core, payments, post, save, setup
+from qr.handlers import core, graph, payments, post, save, setup
 
 ADMIN_COMMANDS = {
     "save", "backups", "setup", "post", "postbatch", "postnow", "archive", "postcaption",
-    "config", "linksource", "broadcast", "set", "unset", "show", "away",
+    "config", "linksource", "broadcast", "set", "unset", "show", "away", "graph", "tgraph",
 }
 ANYWHERE_COMMANDS = {
     "ping", "help", "add", "cancel", "setdone", "setchannelpostofpayment", "setchannel",
     "setpostchannel", "setarchive", "unban", "stats", "clear",
 }
-LONG_RUNNING = {"save", "setup", "post", "postbatch", "postnow", "archive", "broadcast", "unban"}
+LONG_RUNNING = {"save", "setup", "post", "postbatch", "postnow", "archive", "broadcast", "unban", "graph"}
 COMMAND_LEASE = 300
 
 
@@ -212,6 +212,10 @@ async def dispatch(app, event, name: str | None, text: str, command_key: str) ->
         await post.cmd_archive(app, event)
     elif name == "postcaption":
         await post.cmd_postcaption(app, event)
+    elif name == "graph":
+        await graph.cmd_graph(app, event)
+    elif name == "tgraph":
+        await graph.cmd_tgraph(app, event)
     elif name == "config":
         await cmd_config(app, event)
     elif name == "linksource":

@@ -7,6 +7,7 @@ A standalone Telegram **userbot** (Telethon) that runs on your own account and h
 - **Account backup / restore**: `.save` copies your profile, Business setup and every quick reply into MongoDB. `.setup` applies a saved backup to another account.
 - **Payment-screenshot archives**: one ZIP per Asia/Kolkata day is delivered to `@ohthatsthepoint`. The source screenshots are deleted only after that delivery is verified.
 - **Publishing**: `.post`, `.postbatch` and `.postnow` publish screenshot ZIPs to a posting channel you choose.
+- **DM analytics**: `.graph` renders a neon glow card of DMs and INR per hour, so you can see your peak hours.
 
 This project is independent of ChannelGuard. It doesn't import or modify ChannelGuard code. The keyword / admin-bot link-reservation part of the old `/add` (`/add <amt> <name> <keywords…>`, `{link}`) was removed on purpose.
 
@@ -95,8 +96,31 @@ To restore account A onto account B, run `.save` on A. Then start QuickReply on 
 | `.postbatch` | Reply to the first ZIP of a series: every ZIP from there up to the command is processed, oldest date first. `.postbatch <N>` uses the last N ZIPs instead. |
 | `.postnow [YYYY-MM-DD]` | Checks the posting channel and your rights there, then publishes every pending job, oldest first: delivered daily archives plus unfinished `.post`/`.postbatch` jobs. |
 
+### DM analytics (Saved Messages)
+![.tgraph preview (synthetic data)](docs/graph-preview.jpg)
+
+| Command | Effect |
+|---|---|
+| `.graph` | Today's card, live so far (Asia/Kolkata hours). Sent to Saved Messages with a text summary. |
+| `.graph yesterday` / `.graph YYYY-MM-DD` | Any earlier day still in storage. |
+| `.graph scan [day]` | Reads that day's DMs from your chat history first, which picks up DMs that arrived while QuickReply was offline, then renders the card. Already-counted messages are never counted twice. |
+| `.tgraph` | Test card with made-up data. Nothing is read or stored. |
+
+The card shows:
+- DMs per hour as glowing bars, with the peak hour highlighted
+- income (INR) per hour as a gold line
+- total DMs and unique people
+- the peak DM hour and the busiest 3-hour window
+- total income and the peak income hour
+- the share of DM senders who paid
+- a "now" marker on today's card
+
+What counts as a DM: every incoming private message from a real user. Bots, Telegram's service account, your own account and the `.linksource` account are excluded. Only the sender id, message id and time are stored, never the text. Rows are deleted automatically after 180 days. Switch tracking off with `.config dm_tracking off`.
+
+Income per hour comes from `/add` payments. Payments reset with `/clear` still count, because that money really arrived; fake and failed payments don't.
+
 ### Other
-`/set` (reply to a post) · `/unset` · `/show` · `/away on|off|status` · `/broadcast 9:30 AM 18 JUL THANKS FOR` (reply to a post) · `.linksource <@user|id|off>` (the only sender whose invite links update `/demo`) · `.config [key value]` (`rio_pct marco_pct share_base order_prefix order_id_length online_minutes shortcut relay_link swap_greeting archive_enabled`) · `L` in a private chat · `.ping` · `.help`
+`/set` (reply to a post) · `/unset` · `/show` · `/away on|off|status` · `/broadcast 9:30 AM 18 JUL THANKS FOR` (reply to a post) · `.linksource <@user|id|off>` (the only sender whose invite links update `/demo`) · `.config [key value]` (`rio_pct marco_pct share_base order_prefix order_id_length online_minutes shortcut relay_link swap_greeting archive_enabled dm_tracking`) · `L` in a private chat · `.ping` · `.help`
 
 ## What `.save` stores
 
@@ -120,6 +144,7 @@ Every field gets a status: `saved`, `empty`, `unsupported` (with the reason) or 
 | `screenshots`, `screenshots_fs.*` | Screenshots waiting for their daily ZIP. |
 | `archives`, `archives_fs.*` | Daily archive manifests, ZIPs and delivery/post state. |
 | `post_jobs` | Posting jobs with per-item and per-album state. |
+| `dm_events` (TTL 180 days) | One row per incoming DM for `.graph`: sender id, message id, time. No text. |
 | `restore_sessions` (TTL), `restore_history`, `audit`, `command_claims` (TTL) | Confirmations, restore reports, a minimal audit trail, and once-only command execution. |
 
 Timestamps are UTC. Day boundaries use Asia/Kolkata. Login codes, 2FA passwords and session data are never written to MongoDB.
@@ -153,6 +178,10 @@ Each ZIP becomes one `post_jobs` document keyed by its SHA-256, so the same arch
 - Restored **business chat links** get new `t.me/m/…` URLs. The **intro sticker** may not be re-referenced from another account.
 - Greeting/away recipient lists only keep users the target account can reach.
 - Telegram re-encodes uploaded photos. A restored photo is recognised later by the photo id recorded when it was uploaded, so repeated restores don't upload it again.
+
+## Credits
+
+The `.graph` card uses the bundled [Poppins](https://github.com/itfoundry/Poppins) font (SIL Open Font License, `qr/assets/fonts/OFL.txt`). Bundling it means the card looks the same on Windows and Linux, and the ₹ sign renders.
 
 ## Tests
 

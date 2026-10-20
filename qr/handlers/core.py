@@ -19,7 +19,7 @@ from telethon.tl.types import InputUserSelf, MessageMediaWebPage, UserStatusOnli
 
 from qr import BUILD, ui
 from qr.config.settings import IST
-from qr.services import quick_replies
+from qr.services import dm_stats, quick_replies
 from qr.services.entities import LINK_RE, swap_link
 
 BROADCAST_RE = re.compile(
@@ -180,6 +180,10 @@ async def on_incoming(app, event) -> None:
     """
     if not event.is_private:
         return
+    try:
+        await dm_stats.record_dm(app, event)   # .graph analytics (no message text stored)
+    except Exception as error:  # noqa: BLE001 - analytics must never break replies
+        ui.warn(f"DM tracking failed: {type(error).__name__}")
     sender = event.sender_id
     source = app.cfg.get("link_source")
     match = LINK_RE.search(event.raw_text or "")
@@ -364,6 +368,10 @@ HELP_TEXT = (
     "or <code>.postbatch &lt;N&gt;</code> - <code>.postnow [YYYY-MM-DD]</code> publish pending archives\n"
     "<code>.setpostchannel [id|@username]</code> - <code>.postcaption &lt;text&gt;</code> "
     "({date} {pretty_date} {part} {parts} {count})\n\n"
+    "<b>DM analytics</b> (Saved Messages)\n"
+    "<code>.graph</code> today's DMs + INR per hour (peak hours) as a glow card - "
+    "<code>.graph yesterday|YYYY-MM-DD</code> - <code>.graph scan [day]</code> backfill from chat history - "
+    "<code>.tgraph</code> test card with synthetic data\n\n"
     "<b>Greeting</b> (Saved Messages)\n"
     "<code>/set</code> reply to a post - <code>/unset</code> - <code>/show</code> - <code>/away on|off|status</code>\n"
     "<b>Broadcast</b> <code>/broadcast 9:30 AM 18 JUL THANKS FOR</code> (reply to a post)\n"

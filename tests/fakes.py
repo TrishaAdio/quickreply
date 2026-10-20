@@ -112,6 +112,7 @@ class FakeClient:
         self.lose_reply_once = False   # send succeeds but raises afterwards (crash simulation)
         self.users: dict = {}
         self.peer_messages: dict = {}  # chat id -> messages of ordinary chats
+        self.user_dialogs: list = []   # private-chat dialogs, newest first
 
     # ---- helpers -------------------------------------------------------
     def channel(self, ref) -> FakeChannel | None:
@@ -224,9 +225,15 @@ class FakeClient:
         return list(reversed(pool))[:limit]
 
     async def iter_messages(self, entity, search=None, limit=None, min_id=0, max_id=0,
-                            reverse=False, **kwargs):
+                            reverse=False, offset_date=None, **kwargs):
         channel = self.channel(entity)
-        pool = list(reversed(channel.messages if channel else self.account.saved))
+        if channel:
+            source = channel.messages
+        else:
+            source = self.peer_messages.get(getattr(entity, "id", entity), self.account.saved)
+        pool = list(reversed(source))
+        if offset_date is not None:
+            pool = [m for m in pool if m.date < offset_date]
         pool = [m for m in pool if m.id > (min_id or 0) and (not max_id or m.id < max_id)]
         if reverse:
             pool.reverse()
@@ -255,6 +262,8 @@ class FakeClient:
         raise ValueError("MESSAGE_ID_INVALID")
 
     async def iter_dialogs(self):
+        for dialog in self.user_dialogs:
+            yield dialog
         for channel in self.channels.values():
             yield SimpleNamespace(is_group=False, is_channel=True, entity=channel.entity,
                                   name=channel.entity.title)
@@ -458,7 +467,7 @@ class FakeEvent:
     """Outgoing NewMessage event."""
 
     def __init__(self, text, *, chat_id, msg_id=None, out=True, reply=None, is_private=None,
-                 is_channel=False, sender_id=None, fwd=False, chat=None, date=NOW):
+                 is_channel=False, sender_id=None, fwd=False, chat=None, date=NOW, sender=None):
         self.raw_text = text
         self.chat_id = chat_id
         self.id = msg_id or new_id()
@@ -470,6 +479,7 @@ class FakeEvent:
         self.date = date
         self._reply = reply
         self._chat = chat
+        self._sender = sender
         self.message = SimpleNamespace(fwd_from=object() if fwd else None, via_bot_id=None,
                                        media=None, entities=None)
         self.edits: list[str] = []
@@ -501,6 +511,9 @@ class FakeEvent:
 
     async def get_input_sender(self):
         return self.sender_id
+
+    async def get_sender(self):
+        return self._sender
 
     async def delete(self):
         self.deleted = True
