@@ -480,10 +480,122 @@ async def run_install(session: str = config.DEFAULT_SESSION) -> int:
     return 0 if ready else 1
 
 
+def _pick_legacy(path_arg: str | None):
+    from qr.services.legacy_import import candidates, looks_like_legacy
+
+    if path_arg:
+        path = Path(path_arg).expanduser().resolve()
+        if not looks_like_legacy(path):
+            ui.error(f"{path} does not look like a ChannelGuard folder (needs quickreply.py and "
+                     "data/pay.json, quickreply.session or guard.py).")
+            return None
+        return path
+    found = candidates(config.BASE_DIR)
+    if len(found) == 1:
+        return found[0]
+    if found:
+        ui.info("Several ChannelGuard folders were found:")
+        ui.menu([str(item) for item in found])
+        return found[ui.choose("Which one", len(found)) - 1]
+    ui.warn("No ChannelGuard folder found next to or above QuickReply.")
+    raw = ui.ask("Path to your ChannelGuard folder (e.g. ~/channelguard)", allow_empty=True)
+    return _pick_legacy(raw) if raw else None
+
+
+async def run_import(path_arg: str | None = None, session: str = config.DEFAULT_SESSION) -> int:
+    """Copy ChannelGuard's QuickReply data into MongoDB (ChannelGuard is only read)."""
+    from qr.locks import ProcessLock, account_lock_path, session_lock_path
+    from qr.services import legacy_import
+
+    ui.heading("Import ChannelGuard data")
+    lines: list[str] = []
+    legacy = _pick_legacy(path_arg)
+    if legacy is None:
+        return 1
+    info = legacy_import.summary(legacy)
+    ui.info(f"Source: {legacy}")
+    ui.status_line("API_ID / API_HASH", info["credentials"] or None, "found" if info["credentials"] else "not found")
+    ui.status_line("Telegram session", info["session"] or None, "quickreply.session" if info["session"] else "not found")
+    ui.status_line("Payments", True if info["payments"] else None,
+                   f"{info['payments']} record(s), {info['payments_valid']} valid")
+    ui.status_line("Templates", True if info["templates"] else None, ", ".join(info["templates"]) or "defaults")
+    ui.status_line("Payment channel", True if info["payment_channel"] else None,
+                   str(info["payment_channel"] or "not set"))
+    ui.status_line("Greeting", True if info["greeting"] else None,
+                   f"set, {info['greeted']} user(s) already greeted" if info["greeting"] else
+                   f"not set, {info['greeted']} user(s) already greeted")
+    ui.info("ChannelGuard is only read - nothing there is changed or deleted.")
+
+    if legacy_import.legacy_running(legacy):
+        ui.error("The old ChannelGuard quickreply.py is still running. Stop it first "
+                 "(Ctrl+C in its window, or: pkill -f 'channelguard/quickreply.py'), then run this again.")
+        return 1
+
+    report = Report()
+    values = _collect_config(report, legacy)
+    if values is None:
+        ui.error("Configuration is incomplete; nothing was imported.")
+        return 1
+    ui.info(legacy_import.copy_session(legacy, session))
+
+    session_lock = ProcessLock(session_lock_path(str(config.SESSIONS_DIR / session)))
+    if not session_lock.acquire():
+        ui.error("QuickReply is running with this session. Stop it (Ctrl+C) and run the import again.")
+        return 1
+    try:
+        mongo_ok, detail = await check_mongo(values["MONGO_URL"])
+        if not mongo_ok:
+            ui.error(detail)
+            return 1
+        authorized, me, client = await check_session(values["API_ID"], values["API_HASH"], session)
+        try:
+            if not authorized:
+                ui.warn("This session is not logged in.")
+                if not ui.confirm("Log in to Telegram now?", default=True):
+                    return 1
+                me = await login(client)
+            account_lock = ProcessLock(account_lock_path(me.id))
+            if not account_lock.acquire():
+                ui.error("QuickReply is already running for this account. Stop it and run the import again.")
+                return 1
+            try:
+                name = " ".join(p for p in (me.first_name, me.last_name) if p)
+                who = f"{name} @{me.username}" if me.username else name
+                if not ui.confirm(f"Import into Telegram account {who} (id {me.id})?", default=True):
+                    ui.warn("Cancelled - nothing was imported.")
+                    return 1
+                from qr.app import App
+                from qr.database.mongo import Database
+
+                db = Database(values["MONGO_URL"])
+                try:
+                    await db.init()
+                    app = App(client, db, self_id=me.id, me=me)
+                    await app.load_settings()
+                    await app.register_account()
+                    lines = await legacy_import.import_legacy(app, legacy, client=client)
+                    await db.record_audit(me.id, "legacy_import", source=str(legacy), result=lines)
+                finally:
+                    await db.close()
+            finally:
+                account_lock.close()
+        finally:
+            await client.disconnect()
+    finally:
+        session_lock.close()
+
+    ui.heading("Imported")
+    for line in lines or ["nothing new to import"]:
+        ui.success(line)
+    ui.info("Safe to run again: records that already exist are skipped.")
+    ui.info("Start QuickReply with:  " + ui.bold("python quickreply.py") + "  then send /stats to check today's numbers.")
+    return 0
+
+
 def run_menu() -> int:
     ui.box("QUICKREPLY CONTROL PANEL", "Backup \u2022 Restore \u2022 Archives" if ui._UNICODE else "Backup - Restore - Archives")
     options = ["Install / Configure", "Check Dependencies", "Test MongoDB Connection",
-               "Check Telegram Session", "Run QuickReply", "Exit"]
+               "Check Telegram Session", "Import ChannelGuard data", "Run QuickReply", "Exit"]
     while True:
         print()
         ui.menu(options)
@@ -519,6 +631,8 @@ def run_menu() -> int:
                 ui.error(scrub(f"Telegram check failed: {type(error).__name__}: {error}",
                                [values.get("API_HASH")]))
         elif choice == 5:
+            asyncio.run(run_import())
+        elif choice == 6:
             from quickreply import main as run_main
 
             return run_main([])

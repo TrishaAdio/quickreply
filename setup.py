@@ -3,6 +3,7 @@
 
     python setup.py            # menu (install, checks, run)
     python setup.py install    # run the guided installation directly
+    python setup.py import [path]   # copy an old ChannelGuard's QuickReply data
 
 Safe to run repeatedly: existing .env values and Telegram sessions are kept
 unless you explicitly confirm a change. Secrets are never printed.
@@ -25,6 +26,8 @@ def main(argv=None) -> int:
     try:
         if argv and argv[0] == "install":
             return asyncio.run(installer.run_install())
+        if argv and argv[0] == "import":
+            return asyncio.run(installer.run_import(argv[1] if len(argv) > 1 else None))
         return installer.run_menu()
     except KeyboardInterrupt:
         print()

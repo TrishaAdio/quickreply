@@ -28,7 +28,7 @@ python setup.py            # menu; choose [1] Install / Configure
 The installer goes through these steps:
 
 1. Checks Python, the OS, the dependencies, and any existing `.env` or session.
-2. Asks only for the values that are **missing**. If it finds an old ChannelGuard checkout next to this folder, it offers to reuse its `API_ID`/`API_HASH`, `quickreply.session` and QuickReply data (templates, payment channel, payment log, greeting).
+2. Asks only for the values that are **missing**. If it finds an old ChannelGuard checkout next to this folder, or one level above it, it offers to reuse its `API_ID`/`API_HASH`, `quickreply.session` and QuickReply data (templates, payment channel, payment log, greeting).
 3. Runs `pip install -r requirements.txt`. If a package is already installed at a different version, it asks before replacing it.
 4. Connects to MongoDB, creates the indexes, then does a write/read/delete test.
 5. Reuses the authorised Telegram session if one exists. Otherwise it runs Telegram's normal login (phone → code → 2FA password). Codes and passwords go straight to Telegram and are never stored or printed. It then checks that the account can post to the archive and posting channels, without sending anything.
@@ -46,6 +46,32 @@ You can run it again safely. Existing `.env` values are never changed without a 
 | `API_HASH` | Telegram application hash. Required together with `API_ID`. |
 
 Nothing else goes in `.env`. Channels, templates and percentages are stored per account in MongoDB and set with chat commands.
+
+## Moving over from ChannelGuard's quickreply.py
+
+```bash
+cd ~/channelguard/quickreply              # wherever you cloned QuickReply
+python setup.py import                    # or: python setup.py import ~/channelguard
+```
+
+It finds ChannelGuard whether QuickReply sits inside it (`~/channelguard/quickreply`) or next to it (`~/QuickReply`). It shows what it found, then copies everything into MongoDB:
+
+- `API_ID` / `API_HASH`
+- `quickreply.session`, so there's no new login
+- the `/setdone` and `/setchannelpostofpayment` templates
+- the payment channel and the full payment log
+- the `/set` greeting and the list of already-greeted users
+- tuning values such as `SHORTCUT` and the Rio/Marco percentages
+
+The import:
+
+- **Only reads ChannelGuard.** Nothing there is changed or deleted.
+- **Refuses to run** while the old `quickreply.py`, or QuickReply itself, is running.
+- **Asks which account to import into.** It shows the Telegram account and waits for your confirmation.
+- **Is safe to repeat.** Records that already exist are skipped.
+- **Never auto-posts old receipts.** Imported receipts that never reached the channel are not posted later.
+
+It's also option **[5]** in the `python setup.py` menu.
 
 ## Run
 
