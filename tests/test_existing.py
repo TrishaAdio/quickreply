@@ -264,6 +264,14 @@ async def test_runtime_starts_registers_handlers_and_loops(mongo_url, tmp_path, 
             return None
 
     monkeypatch.setattr(telethon, "TelegramClient", FakeTelegram)
+    from qr.services import legacy_import
+    monkeypatch.setattr(legacy_import, "find_running_legacy",
+                        lambda base, account_id: "pid=77 cwd=/old" if account_id == 4321 and refuse else None)
+    refuse = True
+    with pytest.raises(SystemExit):
+        await runtime.run("quickreply")          # old ChannelGuard bot running -> refuse
+    assert created["client"].handlers == []
+    refuse = False
     await runtime.run("quickreply")
     client = created["client"]
     assert Path(created["session"]).parts[-2:] == ("sessions", "quickreply")
