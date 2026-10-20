@@ -142,12 +142,35 @@ async def test_import_command_end_to_end(nested, mongo_url, monkeypatch, capsys)
 
 async def test_import_refuses_while_old_bot_runs(nested, monkeypatch, capsys):
     channelguard, _quickreply = nested
-    monkeypatch.setattr(legacy_import, "legacy_running", lambda path: True)
+    monkeypatch.setattr(legacy_import, "legacy_holder", lambda path: (True, "pid=31337 cwd=/home/ubuntu/channelguard"))
     monkeypatch.setattr(ui, "confirm", lambda *a, **k: pytest.fail("should stop before asking"))
     assert await installer.run_import() == 1
-    assert "still running" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "still running" in out and "kill 31337" in out
 
 
 async def test_import_rejects_a_wrong_path(nested, tmp_path, capsys):
     assert await installer.run_import(str(tmp_path / "nothing-here")) == 1
     assert "does not look like a ChannelGuard folder" in capsys.readouterr().out
+
+
+@pytest.mark.skipif(os.name == "nt", reason="flock probe")
+def test_old_bot_detected_by_account_lock_with_pid(tmp_path, monkeypatch):
+    import fcntl
+    import tempfile
+
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    assert legacy_import.find_running_legacy(tmp_path, 4242) is None
+    lock = tmp_path / "channelguard-quickreply-account-4242.lock"
+    holder = open(lock, "a+")
+    holder.write("pid=999 cwd=/home/ubuntu/channelguard\n")
+    holder.flush()
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        found = legacy_import.find_running_legacy(tmp_path, 4242)
+        assert found == "pid=999 cwd=/home/ubuntu/channelguard"
+        assert "kill 999" in legacy_import.stop_hint(found)
+        assert legacy_import.find_running_legacy(tmp_path, 5555) is None   # other account
+    finally:
+        holder.close()
+    assert lock.read_text() == "pid=999 cwd=/home/ubuntu/channelguard\n"

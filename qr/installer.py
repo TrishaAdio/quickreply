@@ -526,9 +526,11 @@ async def run_import(path_arg: str | None = None, session: str = config.DEFAULT_
                    f"not set, {info['greeted']} user(s) already greeted")
     ui.info("ChannelGuard is only read - nothing there is changed or deleted.")
 
-    if legacy_import.legacy_running(legacy):
-        ui.error("The old ChannelGuard quickreply.py is still running. Stop it first "
-                 "(Ctrl+C in its window, or: pkill -f 'channelguard/quickreply.py'), then run this again.")
+    held, holder = legacy_import.legacy_holder(legacy)
+    if held:
+        ui.error("The old ChannelGuard quickreply.py is still running. Stop it first, then run this again.")
+        ui.info(legacy_import.stop_hint(holder))
+        ui.info("If it comes back after kill, it runs as a service: check  systemctl list-units | grep -i quick")
         return 1
 
     report = Report()

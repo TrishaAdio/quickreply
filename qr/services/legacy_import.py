@@ -15,6 +15,7 @@ deliberately not imported: that feature does not exist in QuickReply.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -83,41 +84,80 @@ def summary(path: Path) -> dict:
     }
 
 
-def legacy_running(path: Path) -> bool:
-    """True while the old quickreply.py holds its data-folder lock.
+def probe_lock(lock_path: Path) -> tuple[bool, str]:
+    """``(held, holder)`` for another process's lock file, without writing to it.
 
-    Probes the lock without writing to the file (ChannelGuard stays untouched).
+    ``holder`` is the ``pid=... cwd=...`` line ChannelGuard writes into its locks.
     """
     import os
 
-    lock_path = Path(path) / "data" / "quickreply.lock"
+    lock_path = Path(lock_path)
     if not lock_path.exists():
-        return False
+        return False, ""
     try:
         handle = open(lock_path, "rb")
     except OSError:
-        return False
+        return False, ""
     try:
+        holder = handle.read(300).replace(b"\0", b"").decode("utf-8", "replace").strip()
+        handle.seek(0)
         if os.name == "nt":
             import msvcrt
 
             try:
                 msvcrt.locking(handle.fileno(), msvcrt.LK_NBRLCK, 1)
             except OSError:
-                return True
+                return True, holder
             handle.seek(0)
             msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            return False
+            return False, ""
         import fcntl
 
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
         except OSError:
-            return True
+            return True, holder
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        return False
+        return False, ""
     finally:
         handle.close()
+
+
+def legacy_holder(path: Path) -> tuple[bool, str]:
+    """Is the old quickreply.py running from this ChannelGuard folder?"""
+    return probe_lock(Path(path) / "data" / "quickreply.lock")
+
+
+def legacy_running(path: Path) -> bool:
+    return legacy_holder(path)[0]
+
+
+def legacy_account_holder(account_id: int) -> tuple[bool, str]:
+    """Is an old ChannelGuard quickreply.py running for this Telegram account
+    (from any folder)? It keeps this host-wide lock while it runs."""
+    import tempfile
+
+    return probe_lock(Path(tempfile.gettempdir()) / f"channelguard-quickreply-account-{int(account_id)}.lock")
+
+
+def find_running_legacy(base: Path, account_id: int | None = None) -> str | None:
+    """Description of a running old quickreply.py, or None."""
+    if account_id is not None:
+        held, holder = legacy_account_holder(account_id)
+        if held:
+            return holder or "unknown process"
+    for path in candidates(base):
+        held, holder = legacy_holder(path)
+        if held:
+            return holder or f"process using {path}"
+    return None
+
+
+def stop_hint(holder: str) -> str:
+    match = re.search(r"pid=(\d+)", holder or "")
+    if match:
+        return f"Stop it with:  kill {match.group(1)}   (it runs as {holder})"
+    return "Find it with:  ps aux | grep quickreply.py   then stop it with kill <PID>"
 
 
 def legacy_credentials(path: Path) -> dict:

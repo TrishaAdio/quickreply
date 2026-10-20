@@ -66,6 +66,16 @@ async def run(session_name: str = config.DEFAULT_SESSION) -> None:
 
         await login(client)
     me = await client.get_me()
+    from qr.services import legacy_import
+
+    old = legacy_import.find_running_legacy(config.BASE_DIR, me.id)
+    if old:
+        ui.error("The old ChannelGuard quickreply.py is still running on this machine. Running both "
+                 "would answer every /add twice.")
+        ui.info(legacy_import.stop_hint(old))
+        await client.disconnect()
+        session_lock.close()
+        raise SystemExit(1)
     account_lock = ProcessLock(account_lock_path(me.id))
     if not account_lock.acquire():
         ui.error("QuickReply is already running for this Telegram account on this machine.")
