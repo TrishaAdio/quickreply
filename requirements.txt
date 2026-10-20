@@ -1,0 +1,6 @@
+# Runtime dependencies (pinned; setup.py installs these)
+telethon==1.36.0
+pymongo==4.15.5
+colorama==0.4.6
+# Windows ships without the IANA time zone database (Asia/Kolkata)
+tzdata==2025.2; sys_platform == "win32"
