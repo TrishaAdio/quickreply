@@ -1,0 +1,23 @@
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+
+# Telegram sessions (full account access)
+sessions/
+*.session
+*.session-journal
+
+# Payment screenshots / archives that may be exported locally
+*.zip
+payment_screenshots_*
+quickreply-post-*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mongo-test/
+.ruff_cache/
